@@ -125,11 +125,9 @@ int main(int argc, char** argv) {
     }
 
     double m;
-    MPI_Reduce(&max, &m, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
-    if(rank == 0) {
+    MPI_Allreduce(&max, &m, 1, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
+    if(rank == 1) {
         printf("MAX = %f\n", m);
     }
-
-	return 0;
     MPI_Finalize();
 }
