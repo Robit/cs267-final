@@ -13,7 +13,7 @@ int main(int argc, char** argv) {
     MM_typecode matcode;
     FILE *f;
     int M, N, nz;   
-    int i, *I, *J;
+    int *I, *J;
     double *val;
 
     int num_rows, num_cols, num_nonzero;
@@ -63,7 +63,7 @@ int main(int argc, char** argv) {
         /*   specifier as in "%lg", "%lf", "%le", otherwise errors will occur */
         /*  (ANSI C X3.159-1989, Sec. 4.9.6.2, p. 136 lines 13-15)            */
 
-        for (i=0; i<nz; i++)
+        for (int i = 0; i < nz; i++)
         {
             fscanf(f, "%d %d %lg\n", &I[i], &J[i], &val[i]);
             I[i]--;  /* adjust from 1-based to 0-based */
@@ -86,10 +86,11 @@ int main(int argc, char** argv) {
         }
         num_rows = M;
         num_cols = N;
-        printf("nz = %d\n", nz);
+        //printf("nz = %d\n", nz);
     }
 
-    MPI_Bcast(&elems_per_proc, 1, MPI_INT, 0, MPI_COMM_WORLD);
+    //Scatter matrix data to all procs relevant vals - num_rows, num_cols, num_nonzero, rows, cols, vals
+    //NOTE THAT M, N, nz, I, J, and val are NOT VALID for all procs, just the root one.
     MPI_Bcast(&num_rows, 1, MPI_INT, 0, MPI_COMM_WORLD);
     MPI_Bcast(&num_cols, 1, MPI_INT, 0, MPI_COMM_WORLD);
     MPI_Scatter(sendcounts, 1, MPI_INT, &num_nonzero, 1, MPI_INT, 0, MPI_COMM_WORLD);
@@ -100,7 +101,7 @@ int main(int argc, char** argv) {
     MPI_Scatterv(J, sendcounts, displs, MPI_INT, cols, num_nonzero, MPI_INT, 0, MPI_COMM_WORLD);
     MPI_Scatterv(val, sendcounts, displs, MPI_DOUBLE, vals, num_nonzero, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 
-    printf("Proc %d received %d values from root\nFirst value: %f at %d,%d\nLast value: %f at %d,%d\n", rank, num_nonzero, vals[0], rows[0], cols[0], vals[num_nonzero - 1], rows[num_nonzero - 1], cols[num_nonzero - 1]);
+    //printf("Proc %d received %d values from root\nFirst value: %f at %d,%d\nLast value: %f at %d,%d\n", rank, num_nonzero, vals[0], rows[0], cols[0], vals[num_nonzero - 1], rows[num_nonzero - 1], cols[num_nonzero - 1]);
 
     /************************/
     /* now write out matrix */
@@ -111,13 +112,23 @@ int main(int argc, char** argv) {
     //for (i=0; i<nz; i++)
     //    fprintf(stdout, "%d %d %20.19g\n", I[i]+1, J[i]+1, val[i]);
 
-    //double* dense_mat = (double*) calloc(sizeof(double), M * N);
-    //for (i = 0; i < nz; i++) {
-    //    dense_mat[I[i] * N + J[i]] = val[i];
-    //}
+    double* dense_mat = (double*) calloc(sizeof(double), num_rows * num_cols);
+    for (int i = 0; i < num_nonzero; i++) {
+        dense_mat[rows[i] * num_cols + cols[i]] = vals[i];
+    }
 
+    double max = dense_mat[0];
+    for(int i = 1; i < num_rows * num_cols; i++) {
+        if(dense_mat[i] > max) {
+            max = dense_mat[i];
+        }
+    }
 
-
+    double m;
+    MPI_Reduce(&max, &m, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
+    if(rank == 0) {
+        printf("MAX = %f\n", m);
+    }
 
 	return 0;
     MPI_Finalize();
