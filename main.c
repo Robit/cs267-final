@@ -2,6 +2,7 @@
 #include "mmio.h"
 #include <cstdio>
 #include <cstdlib>
+#include <chrono>
 
 int main(int argc, char** argv) {
     int num_procs, rank;
@@ -22,10 +23,12 @@ int main(int argc, char** argv) {
     int *sendcounts, *displs;
     int elems_per_proc;
 
+    auto start_time = std::chrono::steady_clock::now();
+
     if(rank == 0) {
         //Root rank reads in the matrix
 
-        if ((f = fopen("494_bus.mtx", "r")) == NULL) 
+        if ((f = fopen("bcsstk30.mtx", "r")) == NULL) 
             exit(1);
 
         if (mm_read_banner(f, &matcode) != 0)
@@ -75,7 +78,7 @@ int main(int argc, char** argv) {
         sendcounts = (int*) malloc(sizeof(int) * num_procs);
         displs = (int*) malloc(sizeof(int) * num_procs);
 
-        elems_per_proc = nz / num_procs + (nz % num_procs != 0);
+        elems_per_proc = nz / num_procs;
 
         for(int i = 0; i < num_procs; i++) {
             sendcounts[i] = elems_per_proc;
@@ -100,6 +103,14 @@ int main(int argc, char** argv) {
     MPI_Scatterv(I, sendcounts, displs, MPI_INT, rows, num_nonzero, MPI_INT, 0, MPI_COMM_WORLD);
     MPI_Scatterv(J, sendcounts, displs, MPI_INT, cols, num_nonzero, MPI_INT, 0, MPI_COMM_WORLD);
     MPI_Scatterv(val, sendcounts, displs, MPI_DOUBLE, vals, num_nonzero, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+    MPI_Barrier(MPI_COMM_WORLD);
+
+    auto end_time = std::chrono::steady_clock::now();
+    std::chrono::duration<double> diff = end_time - start_time;
+    double seconds = diff.count();
+    if(rank == 0) {
+        printf("Simulation Time = %f seconds\n", seconds);
+    }
 
     //printf("Proc %d received %d values from root\nFirst value: %f at %d,%d\nLast value: %f at %d,%d\n", rank, num_nonzero, vals[0], rows[0], cols[0], vals[num_nonzero - 1], rows[num_nonzero - 1], cols[num_nonzero - 1]);
 
@@ -112,6 +123,7 @@ int main(int argc, char** argv) {
     //for (i=0; i<nz; i++)
     //    fprintf(stdout, "%d %d %20.19g\n", I[i]+1, J[i]+1, val[i]);
 
+    /*
     double* dense_mat = (double*) calloc(sizeof(double), num_rows * num_cols);
     for (int i = 0; i < num_nonzero; i++) {
         dense_mat[rows[i] * num_cols + cols[i]] = vals[i];
@@ -129,5 +141,6 @@ int main(int argc, char** argv) {
     if(rank == 1) {
         printf("MAX = %f\n", m);
     }
+    */
     MPI_Finalize();
 }
